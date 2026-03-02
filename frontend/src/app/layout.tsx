@@ -3,13 +3,13 @@ import { Toaster } from 'react-hot-toast'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'TenderZone — Social Media Automation',
-  description: 'Buffer-style social media management platform',
+  title: 'DXIU — Davlat Xaridlari Ishtirokchilari Uyushmasi',
+  description: 'Ijtimoiy tarmoqlarni boshqarish platformasi',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="uz">
       <body>
         {children}
         <Toaster
@@ -19,6 +19,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               background: '#1e2a3b',
               color: '#e2e8f0',
               border: '1px solid rgba(99,102,241,0.2)',
+              borderRadius: '12px',
             },
           }}
         />

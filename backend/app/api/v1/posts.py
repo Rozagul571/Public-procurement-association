@@ -3,12 +3,14 @@ import uuid
 import aiofiles
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from typing import List
 from uuid import UUID
 from app.database import get_db
 from app.api.deps import get_current_user
 from app.models.user import User
-from app.models.post import PostStatus, PublishStatus
+from app.models.post import Post, PostStatus, PublishStatus
 from app.schemas.post import PostCreate, PostUpdate, PostOut
 from app.repositories.post import PostRepository
 from app.repositories.social_account import SocialAccountRepository
@@ -19,10 +21,21 @@ from app.config import settings
 router = APIRouter(prefix="/posts", tags=["Posts"])
 
 
-# ─── Background publish function ──────────────────────────────────────────────
+# ─── Helper: Post + platform_posts eager load ─────────────────────────────────
+
+async def _get_post_with_platforms(db: AsyncSession, post_id: UUID) -> Post | None:
+    """platform_posts eager load bilan post olish (MissingGreenlet oldini oladi)."""
+    result = await db.execute(
+        select(Post)
+        .options(selectinload(Post.platform_posts))
+        .where(Post.id == post_id)
+    )
+    return result.scalar_one_or_none()
+
+
+# ─── Background publish ────────────────────────────────────────────────────────
 
 async def _do_publish(post_id: UUID, _unused):
-    """Postni barcha platformalarga background da nashr qilish."""
     from app.database import AsyncSessionLocal
     async with AsyncSessionLocal() as db:
         post_repo = PostRepository(db)
@@ -51,7 +64,6 @@ async def _do_publish(post_id: UUID, _unused):
                 kwargs = {}
 
                 if pp.platform == "telegram":
-                    # telegram_channel_id orqali kanal topiladi
                     if pp.telegram_channel_id:
                         ch = await tg_repo.get_by_id(pp.telegram_channel_id)
                         if ch:
@@ -61,9 +73,7 @@ async def _do_publish(post_id: UUID, _unused):
                             access_token = settings.TELEGRAM_BOT_TOKEN
                     else:
                         access_token = settings.TELEGRAM_BOT_TOKEN
-
                 else:
-                    # OAuth platformalar: social_account_id orqali
                     if pp.social_account_id:
                         account = await social_repo.get_by_id(pp.social_account_id)
                         if account:
@@ -86,9 +96,7 @@ async def _do_publish(post_id: UUID, _unused):
                     )
                 else:
                     all_success = False
-                    await post_repo.update_platform_post(
-                        pp.id, PublishStatus.failed, error=result.error
-                    )
+                    await post_repo.update_platform_post(pp.id, PublishStatus.failed, error=result.error)
 
             except Exception as e:
                 all_success = False
@@ -101,7 +109,7 @@ async def _do_publish(post_id: UUID, _unused):
         await db.commit()
 
 
-# ─── Upload Media ─────────────────────────────────────────────────────────────
+# ─── Upload Media ──────────────────────────────────────────────────────────────
 
 @router.post("/upload-media")
 async def upload_media(
@@ -124,11 +132,10 @@ async def upload_media(
 
     media_type = "image" if ext in [".jpg", ".jpeg", ".png", ".gif"] else "video"
     media_url = f"http://localhost:8000/uploads/{filename}"
-
     return {"media_url": media_url, "media_type": media_type, "filename": filename}
 
 
-# ─── Create Post ──────────────────────────────────────────────────────────────
+# ─── Create Post ───────────────────────────────────────────────────────────────
 
 @router.post("/", response_model=PostOut, status_code=201)
 async def create_post(
@@ -141,7 +148,6 @@ async def create_post(
     tg_repo = TelegramChannelRepository(db)
 
     try:
-        # 1. Post yaratish
         post = await post_repo.create(
             user_id=current_user.id,
             caption=data.caption,
@@ -150,48 +156,47 @@ async def create_post(
             scheduled_time=data.scheduled_time,
         )
 
-        # 2. Telegram kanallar uchun PlatformPost
-        # telegram_channel_ids — TelegramChannel UUID lari
+        # Telegram kanallar
         for tg_id in (data.telegram_channel_ids or []):
             try:
                 ch = await tg_repo.get_by_id(UUID(tg_id))
                 if ch and ch.user_id == current_user.id:
-                    # telegram_channel_id ishlatamiz (social_account_id EMAS!)
                     await post_repo.add_platform_post(
                         post.id,
                         "telegram",
-                        telegram_channel_id=ch.id,  # ← to'g'ri ustun
+                        telegram_channel_id=ch.id,
                     )
             except (ValueError, Exception):
                 pass
 
-        # 3. OAuth platformalar (youtube, instagram, linkedin)
-        # platforms — ["youtube", "instagram", "linkedin"] ro'yxati
+        # OAuth platformalar
         for platform_key in (data.platforms or []):
             if platform_key == "telegram":
-                continue  # Telegramni telegram_channel_ids orqali qo'shiladi
+                continue
             account = await social_repo.get_by_platform(current_user.id, platform_key)
             if account:
-                # Ulangan account mavjud
                 await post_repo.add_platform_post(
                     post.id,
                     platform_key,
-                    social_account_id=account.id,  # ← social_accounts.id (to'g'ri FK)
+                    social_account_id=account.id,
                 )
             else:
-                # Platform ulanmagan, lekin pending qo'shamiz
                 await post_repo.add_platform_post(post.id, platform_key)
 
         await db.commit()
-        await db.refresh(post)
-        return PostOut.model_validate(post)
 
+        # ← MissingGreenlet FIX: selectinload bilan qayta o'qish
+        refreshed = await _get_post_with_platforms(db, post.id)
+        return PostOut.model_validate(refreshed)
+
+    except HTTPException:
+        raise
     except Exception as e:
-        await db.rollback()  # ← PendingRollbackError oldini oladi
+        await db.rollback()
         raise HTTPException(status_code=500, detail=f"Post yaratishda xato: {str(e)}")
 
 
-# ─── List Posts ───────────────────────────────────────────────────────────────
+# ─── List Posts ────────────────────────────────────────────────────────────────
 
 @router.get("/", response_model=List[PostOut])
 async def list_posts(
@@ -203,7 +208,7 @@ async def list_posts(
     return [PostOut.model_validate(p) for p in posts]
 
 
-# ─── Get Post ─────────────────────────────────────────────────────────────────
+# ─── Get Post ──────────────────────────────────────────────────────────────────
 
 @router.get("/{post_id}", response_model=PostOut)
 async def get_post(
@@ -211,14 +216,13 @@ async def get_post(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    repo = PostRepository(db)
-    post = await repo.get_by_id(post_id)
+    post = await _get_post_with_platforms(db, post_id)
     if not post or post.created_by != current_user.id:
         raise HTTPException(status_code=404, detail="Post topilmadi")
     return PostOut.model_validate(post)
 
 
-# ─── Delete Post ──────────────────────────────────────────────────────────────
+# ─── Delete Post ───────────────────────────────────────────────────────────────
 
 @router.delete("/{post_id}", status_code=204)
 async def delete_post(
@@ -233,7 +237,7 @@ async def delete_post(
         raise HTTPException(status_code=404, detail="Post topilmadi")
 
 
-# ─── Publish Now ──────────────────────────────────────────────────────────────
+# ─── Publish Now ───────────────────────────────────────────────────────────────
 
 @router.post("/{post_id}/publish-now")
 async def publish_now(
@@ -242,8 +246,7 @@ async def publish_now(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    repo = PostRepository(db)
-    post = await repo.get_by_id(post_id)
+    post = await _get_post_with_platforms(db, post_id)
     if not post or post.created_by != current_user.id:
         raise HTTPException(status_code=404, detail="Post topilmadi")
 
@@ -251,7 +254,7 @@ async def publish_now(
     return {"message": "Publishing boshlandi", "post_id": str(post_id)}
 
 
-# ─── Schedule Post ────────────────────────────────────────────────────────────
+# ─── Schedule Post ─────────────────────────────────────────────────────────────
 
 @router.post("/{post_id}/schedule")
 async def schedule_post(
@@ -261,8 +264,7 @@ async def schedule_post(
     db: AsyncSession = Depends(get_db),
 ):
     from datetime import datetime
-    repo = PostRepository(db)
-    post = await repo.get_by_id(post_id)
+    post = await _get_post_with_platforms(db, post_id)
     if not post or post.created_by != current_user.id:
         raise HTTPException(status_code=404, detail="Post topilmadi")
 
@@ -272,7 +274,7 @@ async def schedule_post(
     return {"message": "Post rejalashtirildi", "scheduled_time": scheduled_time}
 
 
-# ─── Platform Status ──────────────────────────────────────────────────────────
+# ─── Platform Status ───────────────────────────────────────────────────────────
 
 @router.get("/{post_id}/platform-status")
 async def platform_status(
@@ -280,8 +282,7 @@ async def platform_status(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    repo = PostRepository(db)
-    post = await repo.get_by_id(post_id)
+    post = await _get_post_with_platforms(db, post_id)
     if not post or post.created_by != current_user.id:
         raise HTTPException(status_code=404, detail="Post topilmadi")
 
