@@ -33,8 +33,7 @@ export default function LoginPage() {
       if (detail === 'Email already registered') {
         toast.error('Bu email allaqachon ro\'yxatdan o\'tgan')
       } else {
-        toast.error(detail || 'Xatolik yuz berdi')
-      }
+        toast.error(Array.isArray(detail) ? (detail[0]?.msg || 'Xatolik') : (detail || 'Xatolik yuz berdi'))      }
     } finally {
       setLoading(false)
     }

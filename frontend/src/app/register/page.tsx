@@ -37,8 +37,7 @@ export default function RegisterPage() {
       if (detail === 'Email already registered') {
         toast.error('Bu email allaqachon ro\'yxatdan o\'tgan')
       } else {
-        toast.error(detail || 'Ro\'yxatdan o\'tishda xato')
-      }
+        toast.error(Array.isArray(detail) ? (detail[0]?.msg || 'Xatolik') : (detail || 'Ro\'yxatdan o\'tishda xato'))      }
     } finally {
       setLoading(false)
     }

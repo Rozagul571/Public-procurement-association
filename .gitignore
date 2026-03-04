@@ -1,2 +1,14 @@
 backend/.env
 .idea/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Celery
+celerybeat-schedule
+
+# OS
+.DS_Store

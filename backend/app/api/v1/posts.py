@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from typing import List
 from uuid import UUID
+
 from app.database import get_db
 from app.api.deps import get_current_user
 from app.models.user import User
@@ -21,10 +22,7 @@ from app.config import settings
 router = APIRouter(prefix="/posts", tags=["Posts"])
 
 
-# ─── Helper: Post + platform_posts eager load ─────────────────────────────────
-
 async def _get_post_with_platforms(db: AsyncSession, post_id: UUID) -> Post | None:
-    """platform_posts eager load bilan post olish (MissingGreenlet oldini oladi)."""
     result = await db.execute(
         select(Post)
         .options(selectinload(Post.platform_posts))
@@ -33,9 +31,8 @@ async def _get_post_with_platforms(db: AsyncSession, post_id: UUID) -> Post | No
     return result.scalar_one_or_none()
 
 
-# ─── Background publish ────────────────────────────────────────────────────────
-
-async def _do_publish(post_id: UUID, _unused):
+# ================== BACKGROUND PUBLISH ==================
+async def _do_publish(post_id: UUID, _unused=None):
     from app.database import AsyncSessionLocal
     async with AsyncSessionLocal() as db:
         post_repo = PostRepository(db)
@@ -50,7 +47,6 @@ async def _do_publish(post_id: UUID, _unused):
         await db.commit()
 
         all_success = True
-
         for pp in post.platform_posts:
             if pp.publish_status == PublishStatus.published:
                 continue
@@ -69,8 +65,6 @@ async def _do_publish(post_id: UUID, _unused):
                         if ch:
                             kwargs["channel_id"] = ch.channel_id
                             access_token = tg_repo.get_bot_token(ch) or settings.TELEGRAM_BOT_TOKEN
-                        else:
-                            access_token = settings.TELEGRAM_BOT_TOKEN
                     else:
                         access_token = settings.TELEGRAM_BOT_TOKEN
                 else:
@@ -87,30 +81,27 @@ async def _do_publish(post_id: UUID, _unused):
                     caption=post.caption,
                     media_url=post.media_url,
                     access_token=access_token,
+                    media_type=post.media_type,   # yangi
                     **kwargs,
                 )
 
                 if result.success:
-                    await post_repo.update_platform_post(
-                        pp.id, PublishStatus.published, external_id=result.external_id
-                    )
+                    await post_repo.update_platform_post(pp.id, PublishStatus.published, external_id=result.external_id)
                 else:
                     all_success = False
                     await post_repo.update_platform_post(pp.id, PublishStatus.failed, error=result.error)
-
             except Exception as e:
                 all_success = False
                 await post_repo.update_platform_post(pp.id, PublishStatus.failed, error=str(e))
 
             await db.commit()
 
-        final = PostStatus.published if all_success else PostStatus.failed
-        await post_repo.update_status(post_id, final)
+        final_status = PostStatus.published if all_success else PostStatus.failed
+        await post_repo.update_status(post_id, final_status)
         await db.commit()
 
 
-# ─── Upload Media ──────────────────────────────────────────────────────────────
-
+# ================== UPLOAD MEDIA (ENG MUHIM) ==================
 @router.post("/upload-media")
 async def upload_media(
     file: UploadFile = File(...),
@@ -131,10 +122,16 @@ async def upload_media(
         await f.write(content)
 
     media_type = "image" if ext in [".jpg", ".jpeg", ".png", ".gif"] else "video"
-    media_url = f"http://localhost:8000/uploads/{filename}"
-    return {"media_url": media_url, "media_type": media_type, "filename": filename}
 
+    # PUBLIC URL (ngrok yoki real domain)
+    public_url = settings.PUBLIC_URL_BASE.rstrip("/")
+    media_url = f"{public_url}/uploads/{filename}"
 
+    return {
+        "media_url": media_url,
+        "media_type": media_type,
+        "filename": filename
+    }
 # ─── Create Post ───────────────────────────────────────────────────────────────
 
 @router.post("/", response_model=PostOut, status_code=201)

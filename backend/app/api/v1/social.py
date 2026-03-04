@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
 from uuid import UUID
 from datetime import datetime, timedelta
-
+from app.services.oauth import instagram as instagram_oauth
 from app.database import get_db
 from app.api.deps import get_current_user
 from app.models.user import User
@@ -17,9 +17,9 @@ from app.services.oauth import instagram as instagram_oauth
 from app.services.oauth import linkedin as linkedin_oauth
 from app.services.platforms.telegram import verify_bot_channel_access
 from app.config import settings
-
+import logging
 router = APIRouter(prefix="/social", tags=["Social Accounts"])
-
+logger = logging.getLogger(__name__)
 
 # ─── ACCOUNTS ────────────────────────────────────────────────────────────────
 
@@ -64,18 +64,16 @@ async def youtube_callback(
 ):
     if error or not code:
         return RedirectResponse(f"{settings.FRONTEND_URL}/platforms?error=youtube_denied")
+
     try:
         tokens = await google_oauth.exchange_code(code)
-        access_token = tokens.get("access_token", "")
-        refresh_token = tokens.get("refresh_token", "")
+        access_token = tokens.get("access_token")
+        refresh_token = tokens.get("refresh_token")
         expires_at = datetime.utcnow() + timedelta(seconds=tokens.get("expires_in", 3600))
 
         channel_info = {}
         if access_token:
-            try:
-                channel_info = await google_oauth.get_channel_info(access_token)
-            except Exception:
-                pass
+            channel_info = await google_oauth.get_channel_info(access_token)
 
         if state:
             repo = SocialAccountRepository(db)
@@ -83,7 +81,7 @@ async def youtube_callback(
                 user_id=UUID(state),
                 platform="youtube",
                 access_token=access_token,
-                refresh_token=refresh_token,
+                refresh_token=refresh_token or "",
                 expires_at=expires_at,
                 account_name=channel_info.get("name", "YouTube Channel"),
                 external_id=channel_info.get("id", ""),
@@ -92,14 +90,15 @@ async def youtube_callback(
 
         return RedirectResponse(f"{settings.FRONTEND_URL}/platforms?connected=youtube&success=true")
     except Exception as e:
-        return RedirectResponse(f"{settings.FRONTEND_URL}/platforms?error=youtube_failed&detail={str(e)[:80]}")
+        logger.error(f"YouTube callback error: {e}")
+        return RedirectResponse(f"{settings.FRONTEND_URL}/platforms?error=youtube_failed&detail={str(e)[:100]}")
 
 
 # ─── INSTAGRAM ───────────────────────────────────────────────────────────────
 
 @router.get("/connect/instagram", response_model=OAuthInitResponse)
 async def connect_instagram(current_user: User = Depends(get_current_user)):
-    url = instagram_oauth.get_auth_url(state=str(current_user.id))
+    url = instagram_oauth.get_auth_url(state=str(current_user.id))  # ← Bu yerda ishlaydi
     return OAuthInitResponse(auth_url=url, platform="instagram")
 
 

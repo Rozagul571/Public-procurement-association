@@ -1,6 +1,5 @@
 from pydantic_settings import BaseSettings
 
-
 class Settings(BaseSettings):
     APP_NAME: str = "TenderZone"
     APP_ENV: str = "development"
@@ -14,6 +13,10 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://localhost:6379/0"
 
     ENCRYPTION_KEY: str = "ZmDfcTF7_60GrrY167zsiPd67pEvs0aGOv2oasOM1Pg="
+
+    # ================== YANGI ==================
+    PUBLIC_URL_BASE: str = "http://localhost:8000"   # ngrok yoki real domain
+    # ==========================================
 
     GOOGLE_CLIENT_ID: str = ""
     GOOGLE_CLIENT_SECRET: str = ""
@@ -30,7 +33,7 @@ class Settings(BaseSettings):
     TELEGRAM_BOT_TOKEN: str = ""
     FRONTEND_URL: str = "http://localhost:3000"
     UPLOAD_DIR: str = "uploads"
-    MAX_FILE_SIZE: int = 104857600
+    MAX_FILE_SIZE: int = 104857600  # 100 MB
 
     class Config:
         env_file = ".env"
