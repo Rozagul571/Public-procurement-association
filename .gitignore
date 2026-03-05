@@ -1,14 +1,41 @@
 backend/.env
-.idea/
+frontend/.env.local
+.env
+.env.local
 
+# ==========================
+# IDE
+.idea/
+.vscode/
+
+# ==========================
 # Python
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
+*.egg-info/
+dist/
+build/
 
+# ==========================
 # Celery
+
 celerybeat-schedule
 
+# ==========================
 # OS
 .DS_Store
+
+# ==========================
+# Migrations
+# ==========================
+backend/alembic/versions/
+
+
+!backend/alembic/__init__.py
+
+# ==========================
+# Logs
+# ==========================
+*.log

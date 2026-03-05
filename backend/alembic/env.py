@@ -1,7 +1,3 @@
-"""
-Alembic env.py — psycopg2 (sync) ishlatadi
-asyncpg EMAS — chunki Alembic sync connection talab qiladi
-"""
 import os
 from app.models import *
 import sys
