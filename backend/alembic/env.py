@@ -10,8 +10,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from app.config import settings
 from app.database import Base
 
-# Barcha modellarni import qil (Alembic autogenerate uchun)
-from app.models import *  # noqa
+from app.models import *  #
 
 config = context.config
 
@@ -20,9 +19,7 @@ if config.config_file_name is not None:
 
 target_metadata = Base.metadata
 
-# SYNC URL — psycopg2 ishlatadi, asyncpg EMAS
 SYNC_URL = settings.SYNC_DATABASE_URL
-# asyncpg bo'lsa psycopg2 ga o'zgartir
 SYNC_URL = SYNC_URL.replace("postgresql+asyncpg://", "postgresql://")
 SYNC_URL = SYNC_URL.replace("postgresql+psycopg2://", "postgresql://")
 
