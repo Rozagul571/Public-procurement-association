@@ -6,7 +6,8 @@ export default function HomePage() {
   const router = useRouter()
   useEffect(() => {
     const token = localStorage.getItem('access_token')
-    router.replace(token ? '/dashboard' : '/login')
+    // Token bo'lsa dashboard, bo'lmasa register
+    router.replace(token ? '/dashboard' : '/register')
   }, [router])
   return (
     <div className="min-h-screen flex items-center justify-center" style={{ background: '#0b1120' }}>

@@ -1,65 +1,42 @@
-import os
-import logging
-from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-
 from app.config import settings
-from app.database import engine
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
-    logger.info(f"🚀 TenderZone started — {settings.APP_ENV}")
-    yield
-    await engine.dispose()
-
+import os
 
 app = FastAPI(
-    title="TenderZone API",
-    description="Social Media Automation Platform",
+    title="DXIU API",
     version="2.0.0",
-    lifespan=lifespan,
     docs_url="/docs",
     redoc_url="/redoc",
 )
 
+# ─── CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        settings.FRONTEND_URL,
+        "http://localhost:8000",
+        "https://tenderzonemarketing.uz",
+        "https://www.tenderzonemarketing.uz",
     ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# ─── Static files (uploads)
 os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
 
-from app.api.v1.auth import router as auth_router
-from app.api.v1.social import router as social_router
-from app.api.v1.posts import router as posts_router
-from app.api.v1.stats import router as stats_router
+# ─── Routers
+from app.api.v1 import auth, posts, social, stats
 
-app.include_router(auth_router, prefix="/api/v1")
-app.include_router(social_router, prefix="/api/v1")
-app.include_router(posts_router, prefix="/api/v1")
-app.include_router(stats_router, prefix="/api/v1")
-
+app.include_router(auth.router, prefix="/api/v1")
+app.include_router(posts.router, prefix="/api/v1")
+app.include_router(social.router, prefix="/api/v1")
+app.include_router(stats.router, prefix="/api/v1")
 
 @app.get("/health")
-async def health():
+def health():
     return {"status": "ok", "app": settings.APP_NAME}
-
-
-@app.get("/")
-async def root():
-    return {"message": "TenderZone API v2.0", "docs": "/docs"}

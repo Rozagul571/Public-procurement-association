@@ -39,3 +39,12 @@ backend/alembic/versions/
 # Logs
 # ==========================
 *.log
+
+.venv/
+
+# Node
+node_modules/
+.next/
+
+# Docker
+.dockerignore
