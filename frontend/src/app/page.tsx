@@ -6,7 +6,6 @@ export default function HomePage() {
   const router = useRouter()
   useEffect(() => {
     const token = localStorage.getItem('access_token')
-    // Token bo'lsa dashboard, bo'lmasa register
     router.replace(token ? '/dashboard' : '/register')
   }, [router])
   return (

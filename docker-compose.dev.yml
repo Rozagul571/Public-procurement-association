@@ -11,14 +11,13 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: 1
       POSTGRES_DB: tenderzone_db
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d tenderzone_db"]
       interval: 5s
       timeout: 5s
       retries: 30
-      start_period: 30s
     restart: unless-stopped
 
   redis:
@@ -30,7 +29,6 @@ services:
       interval: 5s
       timeout: 3s
       retries: 15
-      start_period: 10s
     restart: unless-stopped
 
   migrate:
@@ -41,6 +39,8 @@ services:
     networks: [tenderzone_net]
     env_file:
       - ./backend/.env
+    volumes:
+      - ./backend/alembic/versions:/app/alembic/versions
     depends_on:
       db:
         condition: service_healthy
@@ -59,6 +59,7 @@ services:
       - ./backend/.env
     volumes:
       - uploads_data:/app/uploads
+      - ./backend/alembic/versions:/app/alembic/versions
     depends_on:
       db:
         condition: service_healthy
@@ -69,70 +70,22 @@ services:
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000
     restart: unless-stopped
 
-  celery_worker:
-    build:
-      context: ./backend
-    container_name: tenderzone_worker
-    networks: [tenderzone_net]
-    env_file:
-      - ./backend/.env
-    volumes:
-      - uploads_data:/app/uploads
-    depends_on:
-      migrate:
-        condition: service_completed_successfully
-      redis:
-        condition: service_healthy
-    command: celery -A app.tasks.celery_app.celery_app worker --loglevel=info --concurrency=2 -E
-    restart: unless-stopped
-
-  celery_beat:
-    build:
-      context: ./backend
-    container_name: tenderzone_beat
-    networks: [tenderzone_net]
-    env_file:
-      - ./backend/.env
-    depends_on:
-      migrate:
-        condition: service_completed_successfully
-      redis:
-        condition: service_healthy
-    command: celery -A app.tasks.celery_app.celery_app beat --loglevel=info
-    restart: unless-stopped
-
-  flower:
-    build:
-      context: ./backend
-    container_name: tenderzone_flower
-    networks: [tenderzone_net]
-    ports:
-      - "127.0.0.1:5555:5555"
-    env_file:
-      - ./backend/.env
-    depends_on:
-      redis:
-        condition: service_healthy
-    command: celery -A app.tasks.celery_app.celery_app flower --port=5555
-    restart: unless-stopped
-
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        NEXT_PUBLIC_API_URL: "http://tenderzonemarketing.uz"
+        NEXT_PUBLIC_API_URL: "http://localhost:8000"
     container_name: tenderzone_frontend
     networks: [tenderzone_net]
     ports:
       - "3000:3000"
     environment:
       NODE_ENV: production
-      NEXT_PUBLIC_API_URL: "http://tenderzonemarketing.uz"
+      NEXT_PUBLIC_API_URL: "http://localhost:8000"
     depends_on:
       - backend
     restart: unless-stopped
 
 volumes:
-  postgres_data:
   uploads_data:
