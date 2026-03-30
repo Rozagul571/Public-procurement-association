@@ -130,14 +130,14 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        NEXT_PUBLIC_API_URL: "https://tenderzonemarketing.uz"
+        NEXT_PUBLIC_API_URL: "https://tendermarketing.uz"
     container_name: tenderzone_frontend
     networks: [tenderzone_net]
     ports:
       - "3000:3000"
     environment:
       NODE_ENV: production
-      NEXT_PUBLIC_API_URL: "https://tenderzonemarketing.uz"
+      NEXT_PUBLIC_API_URL: "https://tendermarketing.uz"
     depends_on:
       - backend
     restart: unless-stopped

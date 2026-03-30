@@ -4,7 +4,7 @@ const nextConfig = {
   eslint: { ignoreDuringBuilds: true },
   typescript: { ignoreBuildErrors: true },
   images: {
-    domains: ['tenderzonemarketing.uz', 'augz.uz', 'localhost'],
+    domains: ['tendermarketing.uz', 'augz.uz', 'localhost'],
     unoptimized: true,
   },
 }

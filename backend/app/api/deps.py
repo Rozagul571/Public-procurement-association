@@ -1,4 +1,4 @@
-from fastapi import Depends, HTTPException, status
+import fastapi
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
