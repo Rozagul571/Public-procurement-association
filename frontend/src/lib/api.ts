@@ -5,6 +5,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 const api = axios.create({
   baseURL: `${API_URL}/api/v1`,
   headers: { 'Content-Type': 'application/json' },
+  timeout: 60000, // 60 seconds timeout for large files
 })
 
 // Request interceptor — token qo'shish
@@ -90,6 +91,7 @@ export const postsAPI = {
     form.append('file', file)
     return api.post('/posts/upload-media', form, {
       headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 120000, // 2 minutes for upload
     })
   },
 }

@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import String, ForeignKey, DateTime, Text, Integer
+from sqlalchemy import String, ForeignKey, DateTime, Text, Integer, BigInteger
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
@@ -47,18 +47,13 @@ class PlatformPost(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     post_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("posts.id", ondelete="CASCADE"))
 
-    # OAuth platformalar uchun (youtube, instagram, linkedin)
     social_account_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("social_accounts.id", ondelete="SET NULL"),
         nullable=True,
     )
 
-    # Telegram kanallar uchun (alohida jadval - FK emas, oddiy UUID)
-    telegram_channel_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        nullable=True,
-    )
+    telegram_channel_id: Mapped[str] = mapped_column(String(100), nullable=True)
 
     platform: Mapped[str] = mapped_column(String(50), nullable=False)
     publish_status: Mapped[str] = mapped_column(String(50), default=PublishStatus.pending)

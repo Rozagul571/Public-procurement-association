@@ -192,59 +192,66 @@ async def linkedin_callback(
 
 # ─── TELEGRAM ────────────────────────────────────────────────────────────────
 
-@router.post("/telegram/channels", response_model=TelegramChannelOut, status_code=201)
+@router.post("/telegram/channels", response_model=TelegramChannelOut)
 async def add_telegram_channel(
-    data: TelegramChannelCreate,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+        data: TelegramChannelCreate,
+        current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db)
 ):
-    bot_token = data.bot_token or settings.TELEGRAM_BOT_TOKEN
-    if not bot_token:
-        raise HTTPException(
-            status_code=400,
-            detail="TELEGRAM_BOT_TOKEN .env faylda sozlanmagan. Bot token kiriting.",
-        )
-
-    ok, channel_name = await verify_bot_channel_access(bot_token, data.channel_id)
-    if not ok:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Bot kanalga kira olmadi: {channel_name}. "
-                   f"Botni kanal admini qiling (Post Messages huquqi bilan).",
-        )
+    """Telegram kanal qo'shish"""
 
     repo = TelegramChannelRepository(db)
-    ch = await repo.create(
+
+    # Kanal ID'sini tekshirish
+    if not data.channel_id:
+        raise HTTPException(status_code=400, detail="Channel ID required")
+
+    # Bot tokeni berilgan bo'lsa, kanalga kirishni tekshirish
+    if data.bot_token:
+        can_access, channel_name = await verify_bot_channel_access(
+            data.bot_token, data.channel_id
+        )
+        if not can_access:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Bot cannot access channel: {channel_name}"
+            )
+        if not data.channel_name and channel_name:
+            data.channel_name = channel_name
+
+    # Kanalni saqlash
+    channel = await repo.create(
         user_id=current_user.id,
         channel_id=data.channel_id,
         bot_token=data.bot_token,
         channel_username=data.channel_username,
-        channel_name=data.channel_name or channel_name,
+        channel_name=data.channel_name or data.channel_id
     )
     await db.commit()
-    await db.refresh(ch)
-    return TelegramChannelOut.model_validate(ch)
+    return channel
 
 
 @router.get("/telegram/channels", response_model=List[TelegramChannelOut])
 async def list_telegram_channels(
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+        current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db)
 ):
     repo = TelegramChannelRepository(db)
     channels = await repo.get_all_by_user(current_user.id)
-    return [TelegramChannelOut.model_validate(c) for c in channels]
+    return channels
 
 
 @router.delete("/telegram/channels/{channel_id}")
 async def delete_telegram_channel(
-    channel_id: UUID,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+        channel_id: UUID,
+        current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db)
 ):
     repo = TelegramChannelRepository(db)
     success = await repo.delete(channel_id, current_user.id)
-    await db.commit()
     if not success:
         raise HTTPException(status_code=404, detail="Channel not found")
-    return {"message": "Telegram channel removed"}
+    await db.commit()
+    return {"status": "deleted"}
+
+
