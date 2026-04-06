@@ -1,20 +1,33 @@
+const path = require('path');
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
   eslint: { ignoreDuringBuilds: true },
   typescript: { ignoreBuildErrors: true },
   images: {
-    domains: ['localhost', 'tendermarketing.uz', 'augz.uz'],
+    domains: ['tendermarketing.uz', 'localhost'],
     unoptimized: true,
   },
-  // CORS uchun qo'shimcha
+
+  experimental: {
+    serverActions: {
+      allowedOrigins: ['tendermarketing.uz', 'localhost:3000'],
+    },
+  },
+
   async rewrites() {
     return [
       {
         source: '/api/:path*',
-        destination: 'http://localhost:8000/api/:path*',
+        destination: 'https://tendermarketing.uz/api/:path*',
       },
     ];
   },
-}
-module.exports = nextConfig
+
+  webpack: (config) => {
+    config.resolve.alias['@'] = path.resolve(__dirname, 'src');
+    return config;
+  },
+};
+
+module.exports = nextConfig;

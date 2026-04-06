@@ -5,9 +5,13 @@ from typing import Optional
 
 
 class UserRegister(BaseModel):
-    email: EmailStr
+    email: str
     password: str
     full_name: Optional[str] = None
+# class UserRegister(BaseModel):
+#     email: EmailStr
+#     password: str
+#     full_name: Optional[str] = None
 
 
 class UserLogin(BaseModel):

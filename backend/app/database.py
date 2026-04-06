@@ -3,7 +3,6 @@ from sqlalchemy.orm import DeclarativeBase
 from app.config import settings
 from sqlalchemy.pool import NullPool
 
-
 engine = create_async_engine(
     settings.DATABASE_URL,
     echo=False,
@@ -25,7 +24,4 @@ class Base(DeclarativeBase):
 
 async def get_db():
     async with AsyncSessionLocal() as session:
-        try:
-            yield session
-        finally:
-            await session.close()
+        yield session

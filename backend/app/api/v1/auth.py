@@ -7,47 +7,46 @@ from app.database import get_db
 from app.schemas.user import UserRegister, UserLogin, TokenResponse, UserOut, RefreshRequest
 from app.repositories.user import UserRepository
 from app.core.security import verify_password, create_access_token, create_refresh_token, decode_token
-from app.models.user import User
+from app.models import User
 
 from app.api.deps import get_current_user
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-@router.post("/register", response_model=TokenResponse)
-async def register(
-        data: UserRegister,
-        db: AsyncSession = Depends(get_db)
-):
-    """Foydalanuvchi ro'yxatdan o'tkazish"""
+@router.post("/register", response_model=TokenResponse, status_code=201)
+async def register(data: UserRegister, db: AsyncSession = Depends(get_db)):
     repo = UserRepository(db)
+    try:
+        existing = await repo.get_by_email(data.email)
+        if existing:
+            raise HTTPException(status_code=400, detail="Email already registered")
 
-    # Email mavjudligini tekshirish
-    existing = await repo.get_by_email(data.email)
-    if existing:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered"
+        user = await repo.create(
+            email=data.email,
+            password=data.password,
+            full_name=data.full_name
+        )
+        await db.commit()
+        await db.refresh(user)
+
+        access_token = create_access_token({"sub": str(user.id)})
+        refresh_token = create_refresh_token({"sub": str(user.id)})
+
+        return TokenResponse(
+            access_token=access_token,
+            refresh_token=refresh_token,
+            user=UserOut.model_validate(user),
         )
 
-    # Yangi foydalanuvchi yaratish
-    user = await repo.create(
-        email=data.email,
-        password=data.password,
-        full_name=data.full_name
-    )
-    await db.commit()
-
-    # Tokenlar yaratish
-    access_token = create_access_token(data={"sub": str(user.id), "type": "access"})
-    refresh_token = create_refresh_token(data={"sub": str(user.id), "type": "refresh"})
-
-    return {
-        "access_token": access_token,
-        "refresh_token": refresh_token,
-        "token_type": "bearer",
-        "user": user
-    }
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        import traceback
+        print("=== REGISTER ERROR ===")
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="Ro'yxatdan o'tishda xatolik yuz berdi")
 
 
 @router.post("/login", response_model=TokenResponse)

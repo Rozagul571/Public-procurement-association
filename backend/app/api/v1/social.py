@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from app.services.oauth import instagram as instagram_oauth
 from app.database import get_db
 from app.api.deps import get_current_user
-from app.models.user import User
+from app.models import User
 from app.schemas.social_account import SocialAccountOut, OAuthInitResponse
 from app.schemas.telegram_channel import TelegramChannelCreate, TelegramChannelOut
 from app.repositories.social_account import SocialAccountRepository

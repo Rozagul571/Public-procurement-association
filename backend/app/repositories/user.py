@@ -2,9 +2,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from uuid import UUID
 from typing import Optional
-from app.models.user import User
+from app.models import User
 from app.core.security import hash_password
-
 
 class UserRepository:
     def __init__(self, db: AsyncSession):
@@ -18,11 +17,15 @@ class UserRepository:
         result = await self.db.execute(select(User).where(User.id == user_id))
         return result.scalar_one_or_none()
 
-    async def create(self, email: str, password: str, full_name: str = None) -> User:
+    async def create(self, email: str, password: str, full_name: Optional[str] = None) -> User:
+        hashed_password = hash_password(password)   # bcrypt hash
+
         user = User(
             email=email,
-            hashed_password=hash_password(password),
+            hashed_password=hashed_password,
             full_name=full_name,
+            role="marketer",      
+            is_active=True,
         )
         self.db.add(user)
         await self.db.flush()
